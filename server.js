@@ -23,17 +23,3 @@ const start = () => {
 
 ///////////////////// Make Each Controller as a CLASS////////////////
 start()
-
-//This is how to Scheudle a Polling request every minute without configs
-// We can get response time by calculating Time with Date object (Check mark)
-
-/*
-cron.schedule('* * * * *',() => {axios.get('http://www.google.com/')
-  .then((response) => {
-    console.log("RESPONSE 2", response)
-  })
-  .catch((error) => {
-    console.log(error.response.status);
-  });
-})
-*/
