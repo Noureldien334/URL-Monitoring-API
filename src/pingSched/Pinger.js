@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { ReportSchema } from '../models/Report.js';
 import { UrlSchema } from '../models/Url.js';
 
 async function FetchChecks (){
@@ -11,9 +12,17 @@ async function FetchChecks (){
     return 0;
 }
 
-async function UpdateDB(PingResult){
-  console.log(await PingResult);
-  //
+async function UpdateDB(Response){
+  const query = {
+      CreatorId: Response.UserId,
+      URL: Response.URL
+  };
+  
+  await ReportSchema.findOneAndUpdate(
+      query,
+      { $set : {Status:Response.StatusText} }
+  );
+  
 }
 
 //Function's Explanation
@@ -24,19 +33,21 @@ async function Ping(){
 
     setInterval( () => {
       // Making a get request for the Check's Url with the Specified Configurations
-      
-      //axios.get(Url,{Configs});
+      //axios(Url,{Configs});
       axios.get(Check.Url,{
-        
+        method: 'get',
+        url: Check.Url,
+        timeout: Check.timeout,
       })
-      .then((response) => {
-        UpdateDB(response);
-        //Status is 200 for OK, other than this it's down
+      .then(async (response) => { 
+        //In case it's up, the response is here
+        await UpdateDB({UserId: Check.UserId, URL: Check.Url, StatusText: 'up'});
       })
-      .catch((error) => {
-        console.log(Check.Url+" "+error);
-      })}, 1000);
-      
+      .catch( async(error) => {
+        //In case of Failure, the response is Down
+        // We can make a Response Interface, Better coding
+        await UpdateDB({UserId: Check.UserId, URL: Check.Url, StatusText: 'down'});
+      })}, 5000);
   })
 }
 
