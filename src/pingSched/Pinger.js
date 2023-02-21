@@ -12,73 +12,68 @@ async function FetchChecks (){
     return 0;
 }
 
-async function UpdateDB(Response){
+async function UpdateDB(PingResult){
   const query = {
-      CreatorId: Response.UserId,
-      URL: Response.URL
+    CreatorId: PingResult.UserId,
+    URL: PingResult.URL
   };
 
-  const OldData = await ReportSchema.findOne({CreatorId: query.CreatorId, URL: query.URL});
-  
-  const NewData = await ReportSchema.updateOne({CreatorId: query.CreatorId, URL: query.URL},
-                                              { $set: {Status: Response.StatusText,
-                                                       ResponseTime : Response.ResponseTime,
-                                                       UpTime: (Response.UpTime + OldData.UpTime) ,
-                                                       DownTime: Response.DownTime + OldData.DownTime,
-                                                       Outage: Response.Outage + OldData.Outage,
-                                                       Availability: ((Response.UpTime + OldData.UpTime) / (Response.UpTime + OldData.UpTime + Response.DownTime + OldData.DownTime)) * 100
-                                                }}
-                                              );
-  
+
+  const OldRep = await ReportSchema.findOne({CreatorId: query.CreatorId, URL: query.URL});
+  await ReportSchema.updateOne({CreatorId: query.CreatorId, URL: query.URL},
+                                { $set: {
+                                    Status: PingResult.StatusText,
+                                    ResponseTime: PingResult.ResponseTime,
+                                    UpTime: OldRep.UpTime + PingResult.UpTime,
+                                    DownTime: OldRep.DownTime + PingResult.DownTime,
+                                    Outage: OldRep.Outage + PingResult.Outage,
+                                  }
+                                
+                                }                               
+                              ) 
 }
 
-//Function's Explanation
 async function Ping(){
   const ChecksToBePinged = await FetchChecks();
   
-  ChecksToBePinged.forEach( async (Check) => {
-
-   await setInterval( () => {
-      // Making a get request for the Check's Url with the Specified Configurations
+  ChecksToBePinged.forEach( (Check) => {
+    setInterval( async() => {
       //axios(Url,{Configs});
-
-      //Calculating Response Time
-      
       const StartTime =  Date.now();
-      axios.get(Check.Url,{
-        method: 'get',
+      await axios.get(Check.Url,{
+        method: 'GET',
         url: Check.Url,
         timeout: Check.Timeout,
+      }).then( async(Response) => {
+            await PingResult(Check,Response, Date.now()-StartTime);
+      }).catch(async (error) => {
+            await PingResult(Check,error, Date.now()-StartTime);
       })
-      .then(async (response) => { 
-        //In case it's up, the response is here
-        const EndTime = Date.now();
-        const ResponseTime = EndTime-StartTime;
-        await UpdateDB({UserId: Check.UserId,
-                        URL: Check.Url,
-                        StatusText: 'up',
-                        ResponseTime: ResponseTime,
-                        UpTime: ResponseTime / 1000,
-                        Outage: 0,
-                        DownTime: 0,
-         });
-       
-      })
-      .catch( async(error) => {
-        //In case of Failure, the response is Down
-        // We can make a Response Interface, Better coding
-        const EndTime = Date.now();
-        const ResponseTime = EndTime-StartTime;
-        await UpdateDB({UserId: Check.UserId,
-                        URL: Check.Url,
-                        StatusText: 'down',
-                        ResponseTime: ResponseTime,
-                        DownTime: ResponseTime / 1000,
-                        Outage: 1,
-                        UpTime:0,
-        }); 
-      })}, 10000);
+    }, 40000);
   })
+}
+
+async function PingResult(Check, Result, ResponseTime){
+  
+  Result.UserId = Check.UserId,
+  Result.URL = Check.Url,
+  Result.ResponseTime = ResponseTime;
+  
+  // Check if Status is Up
+  if(Result.status == 200){
+    Result.StatusText = 'UP',  
+    Result.UpTime = ResponseTime / 1000,
+    Result.Outage = 0,
+    Result.DownTime = 0;    
+  }
+  //If Status is Down 
+  else{
+    Result.StatusText = 'Down',  
+    Result.UpTime = 0,
+    Result.Outage = 1,
+    Result.DownTime = ResponseTime / 1000;    
+  }
+   await UpdateDB(Result);
 }
 
 export {Ping};
