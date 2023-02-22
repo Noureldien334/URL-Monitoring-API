@@ -21,5 +21,4 @@ const start = () => {
   });
 };
 
-///////////////////// Make Each Controller as a CLASS////////////////
 start();
