@@ -9,3 +9,8 @@
 -   [JWT](https://www.npmjs.com/package/jsonwebtoken)
 -   [@sendgrid/mail](https://www.npmjs.com/package/@sendgrid/mail)
 -   [body-parser](https://www.npmjs.com/package/body-parser)
+
+
+<h2> API Documentation </h2>
+<a href="https://urlmonitorapi.stoplight.io/docs/url-monitor/branches/main/8e6db5f8789aa-create-new-user"> API Documentation </a>
+
