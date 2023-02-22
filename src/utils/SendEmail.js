@@ -7,19 +7,13 @@ dotenv.config({ path: '../../.env' });
 const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
 sendgrid.setApiKey(SENDGRID_API_KEY);
 
-const msg = {
-  from: process.env.Sender_Email,
-  to: '',
-  subject: '',
-  text: '',
-};
-
 function SendEmail(RecieverEmail, Message) {
-  msg.to = RecieverEmail;
-  msg.subject = Message.subject;
-  msg.text = Message.text;
+  Message.from = process.env.Sender_Email;
+  Message.to = RecieverEmail;
+  Message.subject = Message.subject;
+  Message.text = Message.text;
 
-  sendgrid.send(msg).catch((error) => {
+  sendgrid.send(Message).catch((error) => {
     console.error(error);
   });
 }
