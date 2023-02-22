@@ -1,79 +1,104 @@
 import axios from 'axios';
 import { ReportSchema } from '../models/Report.js';
-import { UrlSchema } from '../models/Url.js';
-
-async function FetchChecks (){
-    try{
-      const AllChecks = await UrlSchema.find({}); //Get All URLs
-      return AllChecks;
-    }catch(error){
-      console.log(error);
-    }
-    return 0;
+import { CheckSchema } from '../models/Check.js';
+import { SendEmail } from '../utils/SendEmail.js';
+import { UserSchema } from '../models/User.js';
+async function FetchChecks() {
+  try {
+    const AllChecks = await CheckSchema.find({}); //Get All URLs
+    return AllChecks;
+  } catch (error) {
+    console.log(error);
+  }
+  return 0;
 }
 
-async function UpdateDB(PingResult){
+async function UpdateDB(PingResponse) {
   const query = {
-    CreatorId: PingResult.UserId,
-    URL: PingResult.URL
+    CreatorId: PingResponse.UserId,
+    URL: PingResponse.URL,
   };
 
+  let OldRep = await ReportSchema.findOne({
+    CreatorId: query.CreatorId,
+    URL: query.URL,
+  });
 
-  const OldRep = await ReportSchema.findOne({CreatorId: query.CreatorId, URL: query.URL});
-  await ReportSchema.updateOne({CreatorId: query.CreatorId, URL: query.URL},
-                                { $set: {
-                                    Status: PingResult.StatusText,
-                                    ResponseTime: PingResult.ResponseTime,
-                                    UpTime: OldRep.UpTime + PingResult.UpTime,
-                                    DownTime: OldRep.DownTime + PingResult.DownTime,
-                                    Outage: OldRep.Outage + PingResult.Outage,
-                                  }
-                                
-                                }                               
-                              ) 
+  await ReportSchema.updateOne(
+    { CreatorId: query.CreatorId, URL: query.URL },
+    {
+      $set: {
+        Status: PingResponse.Status,
+        ResponseTime: PingResponse.ResponseTime,
+        UpTime: OldRep.UpTime + PingResponse.UpTime,
+        DownTime: OldRep.DownTime + PingResponse.DownTime,
+        Outage: OldRep.Outage + PingResponse.Outage,
+        //Ava. is the summation of Uptime / Uptime + Downtime
+        Availability:
+          ((OldRep.UpTime + PingResponse.UpTime) /
+            (OldRep.UpTime +
+              PingResponse.UpTime +
+              OldRep.DownTime +
+              PingResponse.DownTime)) *
+          100,
+      },
+      $push: { History: new Date() },
+    }
+  );
+  //Check if the Old Status has changed, then send An Email
+  if (OldRep.Status != PingResponse.Status) {
+    //Get the Reciever's email using it's ID
+    const RecieverEmail = await UserSchema.findById(PingResponse.UserId);
+    SendEmail(RecieverEmail.Email, {
+      subject: 'Status Changed!!',
+      text: 'Your ' + PingResponse.URL + ' is back ' + PingResponse.Status,
+    });
+  }
 }
 
-async function Ping(){
+async function Ping() {
   const ChecksToBePinged = await FetchChecks();
-  
-  ChecksToBePinged.forEach( (Check) => {
-    setInterval( async() => {
+
+  ChecksToBePinged.forEach((Check) => {
+    setInterval(async () => {
       //axios(Url,{Configs});
-      const StartTime =  Date.now();
-      await axios.get(Check.Url,{
-        method: 'GET',
-        url: Check.Url,
-        timeout: Check.Timeout,
-      }).then( async(Response) => {
-            await PingResult(Check,Response, Date.now()-StartTime);
-      }).catch(async (error) => {
-            await PingResult(Check,error, Date.now()-StartTime);
-      })
-    }, 40000);
-  })
+      const StartTime = Date.now();
+      await axios
+        .get(Check.Url, {
+          method: 'GET',
+          url: Check.Url,
+          timeout: Check.Timeout,
+        })
+        .then(async (Response) => {
+          await PingResult(Check, Response, Date.now() - StartTime);
+        })
+        .catch(async (error) => {
+          await PingResult(Check, error, Date.now() - StartTime);
+        });
+    }, Check.Interval); // Check.Interval
+  });
 }
 
-async function PingResult(Check, Result, ResponseTime){
-  
-  Result.UserId = Check.UserId,
-  Result.URL = Check.Url,
-  Result.ResponseTime = ResponseTime;
-  
+async function PingResult(Check, PingResponse, ResponseTime) {
+  (PingResponse.UserId = Check.UserId),
+    (PingResponse.URL = Check.Url),
+    (PingResponse.ResponseTime = ResponseTime);
+  PingResponse.History = Date.now();
   // Check if Status is Up
-  if(Result.status == 200){
-    Result.StatusText = 'UP',  
-    Result.UpTime = ResponseTime / 1000,
-    Result.Outage = 0,
-    Result.DownTime = 0;    
+  if (PingResponse.status == 200) {
+    (PingResponse.Status = 'UP'),
+      (PingResponse.UpTime = ResponseTime / 1000),
+      (PingResponse.Outage = 0),
+      (PingResponse.DownTime = 0);
   }
-  //If Status is Down 
-  else{
-    Result.StatusText = 'Down',  
-    Result.UpTime = 0,
-    Result.Outage = 1,
-    Result.DownTime = ResponseTime / 1000;    
+  //If Status is Down
+  else {
+    (PingResponse.Status = 'Down'),
+      (PingResponse.UpTime = 0),
+      (PingResponse.Outage = 1),
+      (PingResponse.DownTime = ResponseTime / 1000);
   }
-   await UpdateDB(Result);
+  await UpdateDB(PingResponse);
 }
 
-export {Ping};
+export { Ping };
