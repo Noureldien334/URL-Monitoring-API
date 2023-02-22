@@ -50,7 +50,8 @@ let ReportSchema = mongoose.Schema({
     default: 0,
   },
 
-  History: [String], // TimeStamps
+  History: [String],
+  // TimeStamps
 });
 ReportSchema = mongoose.model('report', ReportSchema);
 export { ReportSchema };
